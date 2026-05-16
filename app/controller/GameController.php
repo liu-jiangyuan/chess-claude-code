@@ -27,15 +27,20 @@ class GameController
         if (!preg_match('/^[A-Za-z0-9]{19}$/', $id)) {
             return response('Invalid game id', 400);
         }
-        $host = $request->host(true);
-        // Strip any :port suffix; WS port is fixed.
-        $hostNoPort = preg_replace('/:\d+$/', '', $host);
-        $isHttps = strtolower($request->header('x-forwarded-proto', '')) === 'https' || $request->header('x-forwarded-ssl') === 'on';
-        $wsScheme = $isHttps ? 'wss' : 'ws';
-        $wsUrl = sprintf('%s://%s:8788', $wsScheme, $hostNoPort);
+        $wsUrl = getenv('WS_URL') ?: $this->buildWsUrl($request);
         return view('game/play', [
             'gameId' => $id,
             'wsUrl' => $wsUrl,
         ]);
+    }
+
+    private function buildWsUrl(Request $request): string
+    {
+        $host = $request->host(true);
+        $hostNoPort = preg_replace('/:\d+$/', '', $host);
+        $isHttps = strtolower($request->header('x-forwarded-proto', '')) === 'https'
+            || $request->header('x-forwarded-ssl') === 'on';
+        $wsScheme = $isHttps ? 'wss' : 'ws';
+        return sprintf('%s://%s:8788', $wsScheme, $hostNoPort);
     }
 }

@@ -17,6 +17,10 @@ services:
     working_dir: /app
     environment:
       - TZ=UTC
+      # WS_URL: 生产环境通过域名访问时设置此项，覆盖自动推断的 WebSocket 地址。
+      # 本地 Docker 无需设置，会自动推断为 ws://ip:8788。
+      # 示例: - WS_URL=wss://your-domain.com
+      #- WS_URL=
     #entrypoint: sh
     #command: ["php", "start.php", "start" ]
     entrypoint: sh

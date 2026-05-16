@@ -11,6 +11,7 @@ use Workerman\Worker;
 class WsServer
 {
     private const TURN_SECONDS = 20;
+    private const CUSTODY_MOVE_DELAY = 0.8;
 
     /** @var array<string, array> gameId => game state */
     private array $games = [];
@@ -45,6 +46,9 @@ class WsServer
                 break;
             case 'resign':
                 $this->onResign($connection);
+                break;
+            case 'cancel_custody':
+                $this->onCancelCustody($connection);
                 break;
             default:
                 $this->error($connection, 'unknown_type');
@@ -191,6 +195,7 @@ class WsServer
             'lastMove' => null,
             'deadlineTs' => null,
             'timerId' => null,
+            'custody' => ['r' => false, 'b' => false],
         ];
         $this->games[$gameId] = $game;
         $this->connections[$gameId] = [];
@@ -204,19 +209,59 @@ class WsServer
             Timer::del($game['timerId']);
             $this->games[$gameId]['timerId'] = null;
         }
-        $tid = Timer::add(self::TURN_SECONDS, function () use ($gameId) {
-            $game = $this->games[$gameId] ?? null;
-            if (!$game || $game['status'] !== 'playing') return;
-            $side = $game['turn'];
-            $move = Xiangqi::randomMove($game['board'], $side);
-            if ($move === null) {
-                // No legal move — stalemate (loss for side to move)
-                $this->endGame($gameId, Xiangqi::opponent($side), 'stalemate');
-                return;
-            }
-            $this->applyMoveAndAdvance($gameId, $move, true);
-        }, [], false);
+
+        $side = $game['turn'];
+        $inCustody = $game['custody'][$side] ?? false;
+
+        if ($inCustody) {
+            $tid = Timer::add(self::CUSTODY_MOVE_DELAY, function () use ($gameId) {
+                $game = $this->games[$gameId] ?? null;
+                if (!$game || $game['status'] !== 'playing') return;
+                if (!($game['custody'][$game['turn']] ?? false)) return;
+                $this->executeAutoMove($gameId);
+            }, [], false);
+        } else {
+            $tid = Timer::add(self::TURN_SECONDS, function () use ($gameId) {
+                $game = $this->games[$gameId] ?? null;
+                if (!$game || $game['status'] !== 'playing') return;
+                $this->games[$gameId]['custody'][$game['turn']] = true;
+                $this->broadcastState($gameId);
+                $this->executeAutoMove($gameId);
+            }, [], false);
+        }
         $this->games[$gameId]['timerId'] = $tid;
+    }
+
+    private function executeAutoMove(string $gameId): void
+    {
+        $game = $this->games[$gameId] ?? null;
+        if (!$game || $game['status'] !== 'playing') return;
+        $side = $game['turn'];
+        $move = Xiangqi::randomMove($game['board'], $side);
+        if ($move === null) {
+            $this->endGame($gameId, Xiangqi::opponent($side), 'stalemate');
+            return;
+        }
+        $this->applyMoveAndAdvance($gameId, $move, true);
+    }
+
+    private function onCancelCustody(TcpConnection $connection): void
+    {
+        $bind = $this->bindings[$connection->id] ?? null;
+        if (!$bind) return;
+        $gameId = $bind['gameId'];
+        $userId = $bind['userId'];
+        $game = $this->games[$gameId] ?? null;
+        if (!$game || $game['status'] !== 'playing') return;
+        $mySide = $game['red'] === $userId ? 'r' : ($game['black'] === $userId ? 'b' : null);
+        if ($mySide === null) return;
+        $this->games[$gameId]['custody'][$mySide] = false;
+        // If it's currently this player's turn, reschedule with normal countdown
+        if ($game['turn'] === $mySide) {
+            $this->games[$gameId]['deadlineTs'] = microtime(true) + self::TURN_SECONDS;
+            $this->scheduleTimer($gameId);
+        }
+        $this->broadcastState($gameId);
     }
 
     private function applyMoveAndAdvance(string $gameId, array $move, bool $auto): void
@@ -242,7 +287,8 @@ class WsServer
             return;
         }
 
-        $this->games[$gameId]['deadlineTs'] = microtime(true) + self::TURN_SECONDS;
+        $nextInCustody = $this->games[$gameId]['custody'][$next] ?? false;
+        $this->games[$gameId]['deadlineTs'] = $nextInCustody ? null : (microtime(true) + self::TURN_SECONDS);
         $this->scheduleTimer($gameId);
         $this->broadcastState($gameId);
     }
@@ -283,6 +329,7 @@ class WsServer
                 'b' => $game['black'] ? ['userId' => $game['black'], 'nickname' => $game['nicknames'][$game['black']] ?? '', 'online' => isset($this->connections[$gameId][$game['black']])] : null,
             ],
             'historyLen' => count($game['history']),
+            'custody' => $game['custody'],
         ];
         foreach (($this->connections[$gameId] ?? []) as $conn) {
             $this->send($conn, $payload);

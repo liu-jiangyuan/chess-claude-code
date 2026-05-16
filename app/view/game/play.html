@@ -164,6 +164,17 @@
     font-size: 13px;
   }
   .status-card button:hover { background: #6a4520; }
+  #cancelCustodyBtn { background: #1a6b3c; }
+  #cancelCustodyBtn:hover { background: #145530; }
+  .custody-badge {
+    display: inline-block;
+    background: #1a6b3c;
+    color: white;
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-size: 11px;
+    margin-left: 6px;
+  }
 
   .overlay {
     position: fixed;
@@ -251,6 +262,7 @@
       <div class="row"><span>状态</span><span class="v" id="statusText">连接中...</span></div>
       <div class="row"><span>已走步数</span><span class="v" id="movesText">0</span></div>
       <button id="resignBtn" style="display:none">认输</button>
+      <button id="cancelCustodyBtn" style="display:none">取消托管</button>
     </div>
   </div>
 </div>
@@ -465,6 +477,7 @@ function render() {
 // ---------------- Interaction ----------------
 function handleClick(x, y) {
   if (!state || state.status !== 'playing') return;
+  if (state.custody && state.custody[mySide]) { toast('托管中，请先取消托管'); return; }
   if (state.turn !== mySide) { toast('还没轮到你'); return; }
   const board = state.board;
   const p = board[y][x];
@@ -584,7 +597,9 @@ function updatePlayers() {
     card.classList.toggle('turn', state.status === 'playing' && state.turn === s);
     if (p) {
       const youBadge = (p.userId === myUserId) ? '<span class="you">你</span>' : '';
-      nick.innerHTML = (p.nickname || '玩家') + youBadge;
+      const inCustody = state.custody && state.custody[s];
+      const custodyBadge = inCustody ? '<span class="custody-badge">托管中</span>' : '';
+      nick.innerHTML = (p.nickname || '玩家') + youBadge + custodyBadge;
       meta.textContent = p.online ? '在线' : '离线';
       meta.style.color = p.online ? '#1a4d2e' : '#c53d2f';
     } else {
@@ -598,19 +613,34 @@ function updateStatus() {
   const st = document.getElementById('statusText');
   const moves = document.getElementById('movesText');
   const resign = document.getElementById('resignBtn');
+  const cancelCustody = document.getElementById('cancelCustodyBtn');
   moves.textContent = state.historyLen;
+  const myCustody = mySide && state.custody && state.custody[mySide];
   if (state.status === 'waiting') {
     st.textContent = '等待对手加入';
     resign.style.display = 'none';
+    cancelCustody.style.display = 'none';
     document.getElementById('timer-label').textContent = '等待对手加入';
     document.getElementById('timer-seconds').textContent = '—';
   } else if (state.status === 'playing') {
-    st.textContent = state.turn === mySide ? '轮到你走子' : '对手思考中';
+    const turnInCustody = state.custody && state.custody[state.turn];
+    if (myCustody) {
+      st.textContent = '托管中 (系统代走)';
+    } else {
+      st.textContent = state.turn === mySide ? '轮到你走子' : '对手思考中';
+    }
     resign.style.display = mySide ? 'block' : 'none';
-    document.getElementById('timer-label').textContent = (state.turn === 'r' ? '红方' : '黑方') + '思考时间';
+    cancelCustody.style.display = myCustody ? 'block' : 'none';
+    if (turnInCustody) {
+      document.getElementById('timer-label').textContent = (state.turn === 'r' ? '红方' : '黑方') + '托管中';
+      document.getElementById('timer-seconds').textContent = '—';
+    } else {
+      document.getElementById('timer-label').textContent = (state.turn === 'r' ? '红方' : '黑方') + '思考时间';
+    }
   } else if (state.status === 'over') {
     st.textContent = '对局结束';
     resign.style.display = 'none';
+    cancelCustody.style.display = 'none';
     document.getElementById('timer-label').textContent = '对局结束';
     document.getElementById('timer-seconds').textContent = '—';
   }
@@ -618,7 +648,8 @@ function updateStatus() {
 
 function startTimerCountdown() {
   if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
-  if (state.status !== 'playing' || !state.deadlineTs) return;
+  const turnInCustody = state.custody && state.custody[state.turn];
+  if (state.status !== 'playing' || !state.deadlineTs || turnInCustody) return;
   const deadlineMs = state.deadlineTs * 1000;
   const tick = () => {
     const remaining = Math.max(0, Math.ceil((deadlineMs - Date.now()) / 1000));
@@ -669,6 +700,9 @@ document.getElementById('copyLink').addEventListener('click', async () => {
 document.getElementById('resignBtn').addEventListener('click', () => {
   if (!confirm('确定认输?')) return;
   if (ws && ws.readyState === 1) ws.send(JSON.stringify({ type: 'resign' }));
+});
+document.getElementById('cancelCustodyBtn').addEventListener('click', () => {
+  if (ws && ws.readyState === 1) ws.send(JSON.stringify({ type: 'cancel_custody' }));
 });
 
 let toastTimer = null;

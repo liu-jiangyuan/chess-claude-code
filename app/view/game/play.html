@@ -271,7 +271,7 @@
   <div class="dialog">
     <h2 id="overTitle"></h2>
     <p id="overDesc"></p>
-    <button onclick="location.reload()">再来一局(刷新)</button>
+    <button id="playAgainBtn">再来一局</button>
     <button class="secondary" onclick="location.href='/'">返回大厅</button>
   </div>
 </div>
@@ -713,6 +713,17 @@ function toast(msg) {
   if (toastTimer) clearTimeout(toastTimer);
   toastTimer = setTimeout(() => el.classList.remove('show'), 1800);
 }
+
+document.getElementById('playAgainBtn').addEventListener('click', async () => {
+  const btn = document.getElementById('playAgainBtn');
+  btn.disabled = true;
+  try {
+    const r = await fetch('/api/game', { method: 'POST' });
+    const data = await r.json();
+    if (data.code === 0) location.href = data.url;
+    else { btn.disabled = false; toast('创建失败'); }
+  } catch (e) { btn.disabled = false; toast('网络错误'); }
+});
 
 // ---------------- Boot ----------------
 render();

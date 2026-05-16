@@ -21,8 +21,8 @@ services:
       # 本地 Docker 无需设置，会自动推断为 ws://ip:8788。
       # 示例: - WS_URL=wss://your-domain.com
       #- WS_URL=
-    #entrypoint: sh
-    #command: ["php", "start.php", "start" ]
+#    entrypoint: sh
+#    command: '-c "cd /app && php start.php start"'
     entrypoint: sh
     command: '-c "sleep 1d"'
 #  这是一个新建的项目, 我想做一个简单的中国象棋页游, 除了符合中国象棋的规则之外, 逻辑只需要有有一个页面创建 对局然后可以复制对应的链接给其他用户, 其他用户通过链接可以加入对局进行游戏, 数据不用入库, 服务重启所有对局和用户都清零, 用户id和对局id全部使用xcode生成, 用户 id 是 12 位长度, 用 - 符号等分, 对局 id

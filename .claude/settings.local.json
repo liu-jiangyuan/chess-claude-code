@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(Get-ChildItem -Path \"D:\\\\code\\\\php-project\\\\chess\" -Force)",
+      "Bash(Select-Object Name, PSIsContainer)",
+      "Bash(Format-Table -AutoSize)",
+      "Read(//mnt/d/code/php-project/**)",
+      "Bash(docker network *)",
+      "Bash(docker-compose up *)",
+      "Bash(docker exec chess *)",
+      "Bash(docker exec *)",
+      "Bash(MSYS_NO_PATHCONV=1 docker exec chess php //app/runtime/wstest.php)"
+    ]
+  }
+}

@@ -1,0 +1,688 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>中国象棋 · 对局</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: linear-gradient(135deg, #f4e4bc 0%, #d4a574 100%);
+    min-height: 100vh;
+    padding: 20px;
+    color: #3a1f08;
+  }
+  .container {
+    max-width: 1000px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: 1fr 280px;
+    gap: 24px;
+  }
+  @media (max-width: 880px) {
+    .container { grid-template-columns: 1fr; }
+  }
+  .topbar {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: #fff8e7;
+    padding: 12px 18px;
+    border-radius: 10px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .topbar .id { font-family: monospace; font-size: 13px; color: #8a5a2b; word-break: break-all; }
+  .topbar button {
+    padding: 8px 16px;
+    background: #c53d2f;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 13px;
+  }
+  .topbar button:hover { background: #a8311f; }
+  .topbar button.secondary { background: #8a5a2b; }
+  .topbar button.secondary:hover { background: #6a4520; }
+
+  .board-wrap {
+    background: #fff8e7;
+    padding: 24px;
+    border-radius: 12px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.1);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .board {
+    position: relative;
+    user-select: none;
+    touch-action: manipulation;
+  }
+  .board svg { display: block; }
+  .piece {
+    position: absolute;
+    width: 44px; height: 44px;
+    transform: translate(-50%, -50%);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 26px;
+    font-weight: 900;
+    font-family: "STKaiti", "KaiTi", "FangSong", "Songti SC", serif;
+    cursor: pointer;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.25), inset 0 -2px 4px rgba(0,0,0,0.15);
+    border: 2px solid;
+    background: #f4d68b;
+    transition: box-shadow 0.15s, transform 0.15s;
+  }
+  .piece.r { color: #c53d2f; border-color: #c53d2f; }
+  .piece.b { color: #1a4d2e; border-color: #1a4d2e; }
+  .piece.selected {
+    box-shadow: 0 0 0 3px #ffb800, 0 4px 8px rgba(0,0,0,0.3);
+    transform: translate(-50%, -50%) scale(1.05);
+  }
+  .piece.last-move { box-shadow: 0 0 0 3px rgba(255,184,0,0.5), 0 2px 4px rgba(0,0,0,0.25); }
+  .target {
+    position: absolute;
+    width: 18px; height: 18px;
+    transform: translate(-50%, -50%);
+    border-radius: 50%;
+    background: rgba(255,184,0,0.7);
+    pointer-events: none;
+    box-shadow: 0 0 0 2px rgba(0,0,0,0.15);
+  }
+  .target.capture {
+    width: 44px; height: 44px;
+    background: transparent;
+    border: 3px solid #ff5733;
+    box-shadow: none;
+  }
+  .click-cell {
+    position: absolute;
+    width: 44px; height: 44px;
+    transform: translate(-50%, -50%);
+    cursor: pointer;
+  }
+
+  .sidebar {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+  .player-card {
+    background: #fff8e7;
+    padding: 14px 16px;
+    border-radius: 10px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+    border-left: 4px solid #ccc;
+  }
+  .player-card.r { border-left-color: #c53d2f; }
+  .player-card.b { border-left-color: #1a4d2e; }
+  .player-card.turn { background: #fff2c2; box-shadow: 0 4px 16px rgba(255,184,0,0.4); }
+  .player-card .side-label { font-size: 12px; color: #8a5a2b; margin-bottom: 4px; }
+  .player-card .nick { font-size: 16px; font-weight: 600; }
+  .player-card .meta { font-size: 12px; color: #999; margin-top: 4px; }
+  .player-card .you { display: inline-block; background: #ffb800; color: #3a1f08; padding: 1px 6px; border-radius: 4px; font-size: 11px; margin-left: 6px; }
+
+  .timer-card {
+    background: #fff8e7;
+    padding: 20px;
+    border-radius: 10px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+    text-align: center;
+  }
+  .timer-card .label { font-size: 13px; color: #8a5a2b; margin-bottom: 8px; }
+  .timer-card .seconds { font-size: 48px; font-weight: 700; color: #c53d2f; font-variant-numeric: tabular-nums; }
+  .timer-card .seconds.warn { color: #ff5733; animation: pulse 0.6s infinite; }
+  @keyframes pulse { 50% { opacity: 0.4; } }
+
+  .status-card {
+    background: #fff8e7;
+    padding: 14px 16px;
+    border-radius: 10px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+    font-size: 13px;
+    color: #5a2d0c;
+  }
+  .status-card .row { display: flex; justify-content: space-between; margin: 4px 0; }
+  .status-card .row .v { font-weight: 600; }
+  .status-card button {
+    width: 100%;
+    padding: 8px;
+    margin-top: 8px;
+    background: #8a5a2b;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 13px;
+  }
+  .status-card button:hover { background: #6a4520; }
+
+  .overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.5);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+  }
+  .overlay.show { display: flex; }
+  .overlay .dialog {
+    background: #fff8e7;
+    padding: 40px 56px;
+    border-radius: 12px;
+    text-align: center;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+    max-width: 90vw;
+  }
+  .overlay h2 { font-size: 28px; margin-bottom: 12px; }
+  .overlay p { color: #8a5a2b; margin-bottom: 24px; }
+  .overlay button {
+    padding: 10px 24px;
+    background: #c53d2f;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 14px;
+    margin: 0 6px;
+  }
+  .overlay button.secondary { background: #8a5a2b; }
+
+  .toast {
+    position: fixed;
+    bottom: 30px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #3a1f08;
+    color: white;
+    padding: 10px 20px;
+    border-radius: 8px;
+    font-size: 14px;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s;
+    z-index: 200;
+  }
+  .toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="topbar">
+    <div>
+      <div style="font-weight:600;font-size:14px;">对局 ID</div>
+      <div class="id" id="gameIdText"><?= htmlspecialchars($gameId) ?></div>
+    </div>
+    <div>
+      <button id="copyLink">复制邀请链接</button>
+      <button class="secondary" onclick="location.href='/'">返回大厅</button>
+    </div>
+  </div>
+
+  <div class="board-wrap">
+    <div class="board" id="board"></div>
+  </div>
+
+  <div class="sidebar">
+    <div class="player-card r" id="card-r">
+      <div class="side-label">红方 (先手)</div>
+      <div class="nick" id="nick-r">等待加入...</div>
+      <div class="meta" id="meta-r"></div>
+    </div>
+    <div class="timer-card">
+      <div class="label" id="timer-label">等待对手加入</div>
+      <div class="seconds" id="timer-seconds">—</div>
+    </div>
+    <div class="player-card b" id="card-b">
+      <div class="side-label">黑方</div>
+      <div class="nick" id="nick-b">等待加入...</div>
+      <div class="meta" id="meta-b"></div>
+    </div>
+    <div class="status-card">
+      <div class="row"><span>状态</span><span class="v" id="statusText">连接中...</span></div>
+      <div class="row"><span>已走步数</span><span class="v" id="movesText">0</span></div>
+      <button id="resignBtn" style="display:none">认输</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="overlay">
+  <div class="dialog">
+    <h2 id="overTitle"></h2>
+    <p id="overDesc"></p>
+    <button onclick="location.reload()">再来一局(刷新)</button>
+    <button class="secondary" onclick="location.href='/'">返回大厅</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const GAME_ID = <?= json_encode($gameId) ?>;
+const WS_URL = <?= json_encode($wsUrl) ?>;
+const TURN_SECONDS = 20;
+
+// Pieces visual chars
+const CHAR = {
+  rK:'帥', rA:'仕', rE:'相', rH:'傌', rR:'俥', rC:'炮', rS:'兵',
+  bK:'將', bA:'士', bE:'象', bH:'馬', bR:'車', bC:'砲', bS:'卒',
+};
+
+// ---------------- Board geometry ----------------
+const CELL = 50;
+const PAD = 28;
+const W = 8 * CELL + PAD * 2;
+const H = 9 * CELL + PAD * 2;
+
+let mySide = null; // 'r' | 'b' | null
+
+function boardX(x) { return PAD + x * CELL; }
+function boardY(y) { return PAD + (mySide === 'b' ? 9 - y : y) * CELL; }
+
+// ---------------- SVG board ----------------
+function renderBoardSvg() {
+  const lines = [];
+  // Horizontal lines y=0..9, span x=0..8
+  for (let y = 0; y < 10; y++) {
+    lines.push(`<line x1="${boardX(0)}" y1="${PAD + y*CELL}" x2="${boardX(8)}" y2="${PAD + y*CELL}" stroke="#3a1f08" stroke-width="1.5"/>`);
+  }
+  // Vertical lines: top half (y=0..4) and bottom half (y=5..9), with river gap on cols 1..7
+  for (let x = 0; x < 9; x++) {
+    if (x === 0 || x === 8) {
+      // Edge files continuous
+      lines.push(`<line x1="${PAD + x*CELL}" y1="${PAD}" x2="${PAD + x*CELL}" y2="${PAD + 9*CELL}" stroke="#3a1f08" stroke-width="1.5"/>`);
+    } else {
+      lines.push(`<line x1="${PAD + x*CELL}" y1="${PAD}" x2="${PAD + x*CELL}" y2="${PAD + 4*CELL}" stroke="#3a1f08" stroke-width="1.5"/>`);
+      lines.push(`<line x1="${PAD + x*CELL}" y1="${PAD + 5*CELL}" x2="${PAD + x*CELL}" y2="${PAD + 9*CELL}" stroke="#3a1f08" stroke-width="1.5"/>`);
+    }
+  }
+  // Palace diagonals
+  // Black palace x=3..5, y=0..2
+  lines.push(`<line x1="${PAD + 3*CELL}" y1="${PAD + 0*CELL}" x2="${PAD + 5*CELL}" y2="${PAD + 2*CELL}" stroke="#3a1f08" stroke-width="1.5"/>`);
+  lines.push(`<line x1="${PAD + 5*CELL}" y1="${PAD + 0*CELL}" x2="${PAD + 3*CELL}" y2="${PAD + 2*CELL}" stroke="#3a1f08" stroke-width="1.5"/>`);
+  // Red palace x=3..5, y=7..9
+  lines.push(`<line x1="${PAD + 3*CELL}" y1="${PAD + 7*CELL}" x2="${PAD + 5*CELL}" y2="${PAD + 9*CELL}" stroke="#3a1f08" stroke-width="1.5"/>`);
+  lines.push(`<line x1="${PAD + 5*CELL}" y1="${PAD + 7*CELL}" x2="${PAD + 3*CELL}" y2="${PAD + 9*CELL}" stroke="#3a1f08" stroke-width="1.5"/>`);
+  // River text
+  lines.push(`<text x="${PAD + 1.3*CELL}" y="${PAD + 4.65*CELL}" font-size="22" fill="#8a5a2b" font-family="serif" font-weight="bold">楚 河</text>`);
+  lines.push(`<text x="${PAD + 5.5*CELL}" y="${PAD + 4.65*CELL}" font-size="22" fill="#8a5a2b" font-family="serif" font-weight="bold">漢 界</text>`);
+
+  return `<svg width="${W}" height="${H}" style="background:#f4d68b;border-radius:4px;">${lines.join('')}</svg>`;
+}
+
+// ---------------- Pseudo-legal moves (client-side hints) ----------------
+function pieceAt(board, x, y) {
+  if (x < 0 || x > 8 || y < 0 || y > 9) return null;
+  return board[y][x];
+}
+function inPalace(side, x, y) {
+  if (x < 3 || x > 5) return false;
+  return side === 'r' ? (y >= 7 && y <= 9) : (y >= 0 && y <= 2);
+}
+function ownSideOfRiver(side, y) {
+  return side === 'r' ? y >= 5 : y <= 4;
+}
+function pieceMoves(board, x, y) {
+  const p = pieceAt(board, x, y);
+  if (!p) return [];
+  const side = p[0], type = p[1];
+  const moves = [];
+  const add = (tx, ty) => {
+    if (tx < 0 || tx > 8 || ty < 0 || ty > 9) return;
+    const dst = board[ty][tx];
+    if (dst === null || dst[0] !== side) moves.push([tx, ty]);
+  };
+  switch (type) {
+    case 'K': [[1,0],[-1,0],[0,1],[0,-1]].forEach(([dx,dy]) => {
+      const tx=x+dx, ty=y+dy;
+      if (inPalace(side, tx, ty)) add(tx, ty);
+    }); break;
+    case 'A': [[1,1],[1,-1],[-1,1],[-1,-1]].forEach(([dx,dy]) => {
+      const tx=x+dx, ty=y+dy;
+      if (inPalace(side, tx, ty)) add(tx, ty);
+    }); break;
+    case 'E': [[2,2],[2,-2],[-2,2],[-2,-2]].forEach(([dx,dy]) => {
+      const tx=x+dx, ty=y+dy;
+      const mx=x+dx/2, my=y+dy/2;
+      if (!ownSideOfRiver(side, ty)) return;
+      if (pieceAt(board, mx, my) !== null) return;
+      add(tx, ty);
+    }); break;
+    case 'H': [
+      [1,2,0,1], [-1,2,0,1], [1,-2,0,-1], [-1,-2,0,-1],
+      [2,1,1,0], [2,-1,1,0], [-2,1,-1,0], [-2,-1,-1,0],
+    ].forEach(([dx,dy,bx,by]) => {
+      if (pieceAt(board, x+bx, y+by) !== null) return;
+      add(x+dx, y+dy);
+    }); break;
+    case 'R': [[1,0],[-1,0],[0,1],[0,-1]].forEach(([dx,dy]) => {
+      let tx=x+dx, ty=y+dy;
+      while (tx>=0 && tx<=8 && ty>=0 && ty<=9) {
+        const dst = board[ty][tx];
+        if (dst === null) moves.push([tx,ty]);
+        else { if (dst[0] !== side) moves.push([tx,ty]); break; }
+        tx += dx; ty += dy;
+      }
+    }); break;
+    case 'C': [[1,0],[-1,0],[0,1],[0,-1]].forEach(([dx,dy]) => {
+      let tx=x+dx, ty=y+dy, jumped=false;
+      while (tx>=0 && tx<=8 && ty>=0 && ty<=9) {
+        const dst = board[ty][tx];
+        if (!jumped) {
+          if (dst === null) moves.push([tx,ty]);
+          else jumped = true;
+        } else {
+          if (dst !== null) {
+            if (dst[0] !== side) moves.push([tx,ty]);
+            break;
+          }
+        }
+        tx += dx; ty += dy;
+      }
+    }); break;
+    case 'S': {
+      const fwd = side === 'r' ? -1 : 1;
+      add(x, y + fwd);
+      const crossed = side === 'r' ? y <= 4 : y >= 5;
+      if (crossed) { add(x+1, y); add(x-1, y); }
+      break;
+    }
+  }
+  return moves;
+}
+
+// ---------------- State ----------------
+let state = null;
+let selected = null; // [x,y]
+let legalTargets = []; // array of [x,y]
+
+// ---------------- Rendering ----------------
+const boardEl = document.getElementById('board');
+function render() {
+  boardEl.innerHTML = renderBoardSvg();
+  boardEl.style.width = W + 'px';
+  boardEl.style.height = H + 'px';
+
+  if (!state) return;
+  const board = state.board;
+
+  // Pieces
+  for (let y = 0; y < 10; y++) {
+    for (let x = 0; x < 9; x++) {
+      const p = board[y][x];
+      if (!p) continue;
+      const div = document.createElement('div');
+      div.className = 'piece ' + p[0];
+      div.textContent = CHAR[p];
+      div.style.left = boardX(x) + 'px';
+      div.style.top = boardY(y) + 'px';
+      if (state.lastMove && ((state.lastMove[2] === x && state.lastMove[3] === y))) {
+        div.classList.add('last-move');
+      }
+      if (selected && selected[0] === x && selected[1] === y) {
+        div.classList.add('selected');
+      }
+      div.dataset.x = x;
+      div.dataset.y = y;
+      div.addEventListener('click', () => handleClick(x, y));
+      boardEl.appendChild(div);
+    }
+  }
+
+  // Legal target indicators
+  legalTargets.forEach(([tx, ty]) => {
+    const dot = document.createElement('div');
+    const captured = board[ty][tx];
+    dot.className = captured ? 'target capture' : 'target';
+    dot.style.left = boardX(tx) + 'px';
+    dot.style.top = boardY(ty) + 'px';
+    boardEl.appendChild(dot);
+  });
+
+  // Empty-cell click overlays (for moving to empty squares)
+  for (let y = 0; y < 10; y++) {
+    for (let x = 0; x < 9; x++) {
+      if (board[y][x] !== null) continue;
+      const c = document.createElement('div');
+      c.className = 'click-cell';
+      c.style.left = boardX(x) + 'px';
+      c.style.top = boardY(y) + 'px';
+      c.addEventListener('click', () => handleClick(x, y));
+      boardEl.appendChild(c);
+    }
+  }
+}
+
+// ---------------- Interaction ----------------
+function handleClick(x, y) {
+  if (!state || state.status !== 'playing') return;
+  if (state.turn !== mySide) { toast('还没轮到你'); return; }
+  const board = state.board;
+  const p = board[y][x];
+  if (selected) {
+    // Click own piece again: change selection
+    if (p && p[0] === mySide) {
+      selectPiece(x, y);
+      return;
+    }
+    // Click target
+    const isTarget = legalTargets.some(t => t[0] === x && t[1] === y);
+    if (isTarget) {
+      sendMove(selected, [x, y]);
+      selected = null;
+      legalTargets = [];
+      render();
+      return;
+    }
+    // Click invalid square: deselect
+    selected = null;
+    legalTargets = [];
+    render();
+    return;
+  }
+  // No selection: must click own piece
+  if (p && p[0] === mySide) selectPiece(x, y);
+}
+
+function selectPiece(x, y) {
+  selected = [x, y];
+  legalTargets = pieceMoves(state.board, x, y);
+  render();
+}
+
+// ---------------- WebSocket ----------------
+let ws = null;
+let myUserId = localStorage.getItem('chess_uid_' + GAME_ID) || localStorage.getItem('chess_uid_global') || '';
+let reconnectAttempts = 0;
+let serverOffsetMs = 0; // approx (serverNow - clientNow) in ms
+let timerInterval = null;
+
+function connect() {
+  ws = new WebSocket(WS_URL);
+  ws.addEventListener('open', () => {
+    reconnectAttempts = 0;
+    document.getElementById('statusText').textContent = '已连接';
+    ws.send(JSON.stringify({
+      type: 'join',
+      gameId: GAME_ID,
+      userId: myUserId || null,
+      nickname: localStorage.getItem('chess_nick') || '',
+    }));
+  });
+  ws.addEventListener('message', (ev) => {
+    let msg;
+    try { msg = JSON.parse(ev.data); } catch { return; }
+    handleMessage(msg);
+  });
+  ws.addEventListener('close', () => {
+    document.getElementById('statusText').textContent = '连接已断开,正在重连...';
+    if (reconnectAttempts < 10) {
+      reconnectAttempts++;
+      setTimeout(connect, Math.min(3000, 500 * reconnectAttempts));
+    }
+  });
+  ws.addEventListener('error', () => {});
+}
+
+function handleMessage(msg) {
+  switch (msg.type) {
+    case 'joined':
+      myUserId = msg.userId;
+      localStorage.setItem('chess_uid_global', myUserId);
+      localStorage.setItem('chess_uid_' + GAME_ID, myUserId);
+      mySide = msg.side;
+      render(); // re-render with possible flip
+      break;
+    case 'state':
+      state = msg;
+      onState();
+      break;
+    case 'error':
+      toast(errorText(msg.code));
+      break;
+  }
+}
+
+function errorText(code) {
+  switch (code) {
+    case 'game_full': return '对局已满,无法加入';
+    case 'illegal_move': return '不允许的走法';
+    case 'not_your_turn': return '还没轮到你';
+    default: return '错误: ' + code;
+  }
+}
+
+function onState() {
+  // Server doesn't send serverNowMs explicitly; deadlineTs is in seconds.
+  // We assume close-enough clocks. If serverOffsetMs unknown, treat now as server's now.
+  updatePlayers();
+  updateStatus();
+  startTimerCountdown();
+  selected = null;
+  legalTargets = [];
+  render();
+  if (state.status === 'over') {
+    setTimeout(showGameOver, 200);
+  }
+}
+
+function updatePlayers() {
+  for (const s of ['r', 'b']) {
+    const p = state.players[s];
+    const card = document.getElementById('card-' + s);
+    const nick = document.getElementById('nick-' + s);
+    const meta = document.getElementById('meta-' + s);
+    card.classList.toggle('turn', state.status === 'playing' && state.turn === s);
+    if (p) {
+      const youBadge = (p.userId === myUserId) ? '<span class="you">你</span>' : '';
+      nick.innerHTML = (p.nickname || '玩家') + youBadge;
+      meta.textContent = p.online ? '在线' : '离线';
+      meta.style.color = p.online ? '#1a4d2e' : '#c53d2f';
+    } else {
+      nick.textContent = '等待加入...';
+      meta.textContent = '';
+    }
+  }
+}
+
+function updateStatus() {
+  const st = document.getElementById('statusText');
+  const moves = document.getElementById('movesText');
+  const resign = document.getElementById('resignBtn');
+  moves.textContent = state.historyLen;
+  if (state.status === 'waiting') {
+    st.textContent = '等待对手加入';
+    resign.style.display = 'none';
+    document.getElementById('timer-label').textContent = '等待对手加入';
+    document.getElementById('timer-seconds').textContent = '—';
+  } else if (state.status === 'playing') {
+    st.textContent = state.turn === mySide ? '轮到你走子' : '对手思考中';
+    resign.style.display = mySide ? 'block' : 'none';
+    document.getElementById('timer-label').textContent = (state.turn === 'r' ? '红方' : '黑方') + '思考时间';
+  } else if (state.status === 'over') {
+    st.textContent = '对局结束';
+    resign.style.display = 'none';
+    document.getElementById('timer-label').textContent = '对局结束';
+    document.getElementById('timer-seconds').textContent = '—';
+  }
+}
+
+function startTimerCountdown() {
+  if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
+  if (state.status !== 'playing' || !state.deadlineTs) return;
+  const deadlineMs = state.deadlineTs * 1000;
+  const tick = () => {
+    const remaining = Math.max(0, Math.ceil((deadlineMs - Date.now()) / 1000));
+    const el = document.getElementById('timer-seconds');
+    el.textContent = remaining + 's';
+    el.classList.toggle('warn', remaining <= 5 && remaining > 0);
+    if (remaining <= 0) { clearInterval(timerInterval); timerInterval = null; }
+  };
+  tick();
+  timerInterval = setInterval(tick, 200);
+}
+
+function sendMove(from, to) {
+  if (!ws || ws.readyState !== 1) return;
+  ws.send(JSON.stringify({ type: 'move', from: [from[0], from[1]], to: [to[0], to[1]] }));
+}
+
+function showGameOver() {
+  const title = document.getElementById('overTitle');
+  const desc = document.getElementById('overDesc');
+  const winner = state.winner;
+  let resultText;
+  if (!winner) resultText = '和棋';
+  else if (winner === mySide) resultText = '你赢了!';
+  else if (mySide) resultText = '你输了';
+  else resultText = (winner === 'r' ? '红方' : '黑方') + '胜';
+  title.textContent = resultText;
+  const reasonMap = {
+    checkmate: '将死',
+    stalemate: '困毙(无子可走)',
+    king_captured: '将/帅被吃',
+    resign: '认输',
+  };
+  desc.textContent = '结束原因: ' + (reasonMap[state.endReason] || state.endReason || '');
+  document.getElementById('overlay').classList.add('show');
+}
+
+// ---------------- UI hooks ----------------
+document.getElementById('copyLink').addEventListener('click', async () => {
+  const url = location.href;
+  try {
+    await navigator.clipboard.writeText(url);
+    toast('链接已复制');
+  } catch {
+    prompt('请手动复制链接', url);
+  }
+});
+document.getElementById('resignBtn').addEventListener('click', () => {
+  if (!confirm('确定认输?')) return;
+  if (ws && ws.readyState === 1) ws.send(JSON.stringify({ type: 'resign' }));
+});
+
+let toastTimer = null;
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  if (toastTimer) clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 1800);
+}
+
+// ---------------- Boot ----------------
+render();
+connect();
+</script>
+</body>
+</html>

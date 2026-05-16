@@ -1,0 +1,29 @@
+services:
+  chess:
+    image: wdlyt/php-cli:8.3-alpine
+    container_name: chess
+    restart: unless-stopped
+    networks:
+      - db
+    ports:
+      - "19505:8787"
+      - "8788:8788"
+    tty: true
+    volumes:
+      - ./php-ext/librandcode_php.so:/usr/local/lib/php/extensions/no-debug-non-zts-20230831/randcode_php.so
+      - ./php-ext/randcode.ini:/usr/local/etc/php/conf.d/randcode.ini
+      - ./:/app
+    privileged: true
+    working_dir: /app
+    environment:
+      - TZ=UTC
+    #entrypoint: sh
+    #command: ["php", "start.php", "start" ]
+    entrypoint: sh
+    command: '-c "sleep 1d"'
+#  这是一个新建的项目, 我想做一个简单的中国象棋页游, 除了符合中国象棋的规则之外, 逻辑只需要有有一个页面创建 对局然后可以复制对应的链接给其他用户, 其他用户通过链接可以加入对局进行游戏, 数据不用入库, 服务重启所有对局和用户都清零, 用户id和对局id全部使用xcode生成, 用户 id 是 12 位长度, 用 - 符号等分, 对局 id
+#  19 位长度,不用特殊符号切分, 另外 对局里每次思考时间是 20s,到时间没有执行自动随意走一步
+networks:
+  db:
+    external: true
+    name: dbNet
